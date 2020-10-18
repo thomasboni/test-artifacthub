@@ -1,0 +1,48 @@
+{{- $fullName := include "grid-api.fullname" . -}}
+{{- $release := .Release -}}
+{{- $image := .Values.image -}}
+{{- $imagePullSecrets := .Values.imagePullSecrets -}}
+{{- $labels :=  include "grid-api.labels" . }}
+{{- range .Values.hook_jobs }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hook-{{ $fullName }}-{{ .name }}
+  labels:
+{{ $labels  | indent 4 }}
+  annotations:
+    "helm.sh/hook": "{{ .hook }}"
+    "helm.sh/hook-weight": "{{ .weight }}"
+    "helm.sh/hook-delete-policy": "{{ .deletePolicy }}"
+spec:
+  template:
+    spec:
+    {{- with $imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      containers:
+      - name: hook-{{ $fullName }}-{{.name}}
+        {{- if .customImage }}
+        image: {{ .customImage }}
+        {{- else }}
+        image: "{{ $image.registry }}:{{ $image.tag }}"
+        {{- end }}
+        imagePullPolicy: {{ $image.pullPolicy }}
+        command:
+        {{- range .command }}
+        - {{ . | quote }}
+        {{- end }}
+        args:
+        {{- range .args }}
+        - {{ . | quote }}
+        {{- end }}
+        envFrom:
+          - configMapRef:
+              name: {{ $release.Name }}
+          - secretRef:
+              name: {{ $release.Name }}
+      restartPolicy: {{ .restartPolicy }}
+  backoffLimit: {{ .backoffLimit }}
+---
+{{- end }}
